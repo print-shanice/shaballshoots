@@ -5,7 +5,7 @@ import { AuthProvider } from '@/components/AuthProvider'
 import PageTransition from '@/components/PageTransition'
 
 export const metadata: Metadata = {
-  title: 'shaballshoots - Photography Portfolio',
+  title: 'shaballshoots',
   description: 'Personal photography portfolio showcasing stories through images',
 }
 
@@ -20,11 +20,6 @@ export default function RootLayout({
         <AuthProvider>
           <Navigation />
           <main className="min-h-screen bg-stone-50">
-            {/*
-              PageTransition is a client component keyed on usePathname().
-              Every route change unmounts + remounts it, re-firing animate-fadeIn
-              uniformly across all pages and gallery filter switches.
-            */}
             <PageTransition>
               {children}
             </PageTransition>

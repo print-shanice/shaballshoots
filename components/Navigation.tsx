@@ -70,11 +70,11 @@ export default function Navigation() {
     <nav className="bg-stone-50/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="container mx-auto px-4 lg:px-6">
         <div className="flex justify-between items-center h-20">
-          <Link href="/" className="text-3xl tracking-wide">
+          <Link href="/" className="text-xl sm:text-3xl tracking-wide">
             <LogoSpin />
           </Link>
 
-          <div className="flex space-x-10 items-center">
+          <div className="flex space-x-5 sm:space-x-10 items-center">
             <Link
               href="/"
               className={`text-sm lowercase tracking-wide ${

@@ -209,9 +209,6 @@ export default function Gallery() {
 
   // ── render helpers ────────────────────────────────────────────────────
 
-  // Folder cards (country / year / month / city drill-down).
-  // Use a fixed 3:2 aspect-ratio container with object-cover — these are
-  // decorative cover thumbnails where cropping is intentional and desirable.
   const renderCityFolders = (country: string) => {
     const cities = getCitiesInCountry(country)
     return (
