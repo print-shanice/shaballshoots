@@ -4,8 +4,10 @@ this is just my personal photography portfolio — a curated collection of photo
 
 ![gallery](public/galleryImage.png)
 
-i hope you enjoy looking at some of them 
----
+
+i hope some of them make you feel something
+
+
 
 ## tabs
 
@@ -13,6 +15,14 @@ i hope you enjoy looking at some of them
 - **my favourites** — MY personal favourites 
 - **about** - why i take photos
 - **admin login** — only for me! log in to upload, edit, or delete photos
+
+## tech stack
+
+- **next.js** 
+- **react**
+- **tailwindcss** 
+- **typescript**
+- **supabase**
 
 
 
