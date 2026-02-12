@@ -16,5 +16,13 @@ i hope some of them make you feel something
 - **about** - why i take photos
 - **admin login** — only for me! log in to upload, edit, or delete photos
 
+## tech stack
+
+- **next.js** 
+- **react**
+- **tailwindcss** 
+- **typescript**
+- **supabase**
+
 
 
