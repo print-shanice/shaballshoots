@@ -1,11 +1,11 @@
 # shaballshoots
 
-this is just my personal photography portfolio — a curated collection of photos from my 20s, organised by country, year, and month.
+this is just my personal photography portfolio — a curated collection of photos from my 20s, organised by country, year, and month
+
+you can view it [here](https://shaballshoots.vercel.app/) 
 
 ![gallery](public/galleryImage.png)
 
-
-i hope some of them make you feel something
 
 
 
