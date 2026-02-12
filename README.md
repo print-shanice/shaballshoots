@@ -4,8 +4,10 @@ this is just my personal photography portfolio — a curated collection of photo
 
 ![gallery](public/galleryImage.png)
 
-i hope you enjoy looking at some of them 
----
+
+i hope some of them make you feel something
+
+
 
 ## tabs
 
