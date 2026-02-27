@@ -4,6 +4,23 @@ import { notFound } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import PhotoDetail from '@/components/PhotoDetail'
 
+// Pre-render all photo pages at build time to eliminate cold starts on direct URL visits
+export async function generateStaticParams() {
+  try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    )
+    const { data } = await supabase.from('photos').select('id')
+    return (data ?? []).map((row: { id: string }) => ({ id: row.id }))
+  } catch {
+    return []
+  }
+}
+
+// Allow new photos (not in static params) to be rendered on demand
+export const dynamicParams = true
+
 function getAnonSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

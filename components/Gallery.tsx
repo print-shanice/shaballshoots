@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import Link from 'next/link'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Image from 'next/image'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { createClient } from '@supabase/supabase-js'
+import PhotoModal from './PhotoModal'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -31,8 +31,8 @@ interface GroupedPhotos {
 
 // ── PhotoGrid: scroll-reveal + fixed 4:3 aspect-ratio photo cards ──────────
 
-function PhotoCard({ photo }: { photo: Photo }) {
-  const ref = useRef<HTMLAnchorElement>(null)
+function PhotoCard({ photo, onClick }: { photo: Photo; onClick: (photo: Photo) => void }) {
+  const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const el = ref.current
@@ -51,9 +51,9 @@ function PhotoCard({ photo }: { photo: Photo }) {
   }, [])
 
   return (
-    <Link
+    <div
       ref={ref}
-      href={`/photo/${photo.id}`}
+      onClick={() => onClick(photo)}
       className="group cursor-pointer scroll-reveal"
     >
       {/* Fixed 4:3 aspect-ratio container — images always the same height */}
@@ -66,7 +66,14 @@ function PhotoCard({ photo }: { photo: Photo }) {
           src={photo.image_url}
           alt={photo.story}
           loading="lazy"
-          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{
+            transform: 'scale(1)',
+            transition: 'transform 500ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+            willChange: 'transform',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.05)')}
+          onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
         />
       </div>
       <div className="mt-3 flex justify-between items-baseline">
@@ -77,15 +84,15 @@ function PhotoCard({ photo }: { photo: Photo }) {
           {photo.year}
         </p>
       </div>
-    </Link>
+    </div>
   )
 }
 
-function PhotoGrid({ photos }: { photos: Photo[] }) {
+function PhotoGrid({ photos, onPhotoClick }: { photos: Photo[]; onPhotoClick: (photo: Photo) => void }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
       {photos.map((photo) => (
-        <PhotoCard key={photo.id} photo={photo} />
+        <PhotoCard key={photo.id} photo={photo} onClick={onPhotoClick} />
       ))}
     </div>
   )
@@ -109,6 +116,8 @@ export default function Gallery() {
 
   const [favouriteIds, setFavouriteIds] = useState<Set<string>>(new Set())
   const [loadingFavourites, setLoadingFavourites] = useState(false)
+
+  const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null)
 
   // ── data fetching ─────────────────────────────────────────────────────
 
@@ -151,55 +160,89 @@ export default function Gallery() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── grouping helpers ──────────────────────────────────────────────────
+  // ── pure helpers (no state deps, never change) ───────────────────────
 
-  const getCountryFromLocation = (loc: string) => {
+  const getCountryFromLocation = useCallback((loc: string) => {
     const parts = loc.split(',')
     return parts.length > 1 ? parts[1].trim() : loc
-  }
+  }, [])
 
-  const getCityFromLocation = (loc: string) => loc.split(',')[0].trim()
+  const getCityFromLocation = useCallback((loc: string) => loc.split(',')[0].trim(), [])
 
-  const getGroupedPhotos = (): GroupedPhotos => {
-    if (groupBy === 'all' || groupBy === 'favourites') return {}
+  // ── memoized derived data — only recomputes when photos array changes ─
+  // This is the core fix for the "by country" lag: grouping, city maps, and
+  // cover photos are computed once and cached, not re-run on every render.
+
+  const groupedByCountry = useMemo<GroupedPhotos>(() => {
     return photos.reduce((acc, photo) => {
-      let key: string
-      if (groupBy === 'country') {
-        key = getCountryFromLocation(photo.country)
-      } else if (groupBy === 'year') {
-        key = photo.year.toString()
-      } else {
-        const currentYear = new Date().getFullYear()
-        if (photo.year !== currentYear) return acc
-        key = photo.month
-      }
+      const key = getCountryFromLocation(photo.country)
       if (!acc[key]) acc[key] = []
       acc[key].push(photo)
       return acc
     }, {} as GroupedPhotos)
-  }
+  }, [photos, getCountryFromLocation])
 
-  const getCitiesInCountry = (country: string) =>
-    photos
-      .filter((p) => getCountryFromLocation(p.country) === country)
-      .reduce((acc, photo) => {
-        const city = getCityFromLocation(photo.country)
-        if (!acc[city]) acc[city] = []
-        acc[city].push(photo)
-        return acc
-      }, {} as { [city: string]: Photo[] })
+  const groupedByYear = useMemo<GroupedPhotos>(() => {
+    return photos.reduce((acc, photo) => {
+      const key = photo.year.toString()
+      if (!acc[key]) acc[key] = []
+      acc[key].push(photo)
+      return acc
+    }, {} as GroupedPhotos)
+  }, [photos])
 
-  const getCoverPhoto = (group: Photo[]) =>
-    [...group].sort(
-      (a, b) =>
-        new Date(b.upload_timestamp).getTime() - new Date(a.upload_timestamp).getTime(),
-    )[0]
+  const groupedByMonth = useMemo<GroupedPhotos>(() => {
+    const currentYear = new Date().getFullYear()
+    return photos.reduce((acc, photo) => {
+      if (photo.year !== currentYear) return acc
+      const key = photo.month
+      if (!acc[key]) acc[key] = []
+      acc[key].push(photo)
+      return acc
+    }, {} as GroupedPhotos)
+  }, [photos])
 
-  const handleCountryClick = (countryName: string) => {
-    const cities = getCitiesInCountry(countryName)
+  // Map of country -> { cityName -> Photo[] }, memoized once
+  const citiesByCountry = useMemo<Record<string, Record<string, Photo[]>>>(() => {
+    const result: Record<string, Record<string, Photo[]>> = {}
+    for (const photo of photos) {
+      const country = getCountryFromLocation(photo.country)
+      const city = getCityFromLocation(photo.country)
+      if (!result[country]) result[country] = {}
+      if (!result[country][city]) result[country][city] = []
+      result[country][city].push(photo)
+    }
+    return result
+  }, [photos, getCountryFromLocation, getCityFromLocation])
+
+  // Cover photo per group key, memoized — avoids sort() on every render
+  const coverByKey = useMemo<Record<string, Photo>>(() => {
+    const allGroups: Record<string, Photo[]> = {
+      ...groupedByCountry,
+      ...groupedByYear,
+      ...groupedByMonth,
+    }
+    const result: Record<string, Photo> = {}
+    for (const [key, group] of Object.entries(allGroups)) {
+      result[key] = group.reduce((best, p) =>
+        new Date(p.upload_timestamp) > new Date(best.upload_timestamp) ? p : best
+      )
+    }
+    return result
+  }, [groupedByCountry, groupedByYear, groupedByMonth])
+
+  const getGroupedPhotos = useCallback((): GroupedPhotos => {
+    if (groupBy === 'country') return groupedByCountry
+    if (groupBy === 'year') return groupedByYear
+    if (groupBy === 'month') return groupedByMonth
+    return {}
+  }, [groupBy, groupedByCountry, groupedByYear, groupedByMonth])
+
+  const handleCountryClick = useCallback((countryName: string) => {
+    const cities = citiesByCountry[countryName] ?? {}
     setSelectedGroup(countryName)
     setSelectedCity(Object.keys(cities).length > 1 ? null : Object.keys(cities)[0])
-  }
+  }, [citiesByCountry])
 
   const switchMode = (mode: GroupBy) => {
     setGroupBy(mode)
@@ -207,14 +250,34 @@ export default function Gallery() {
     setSelectedCity(null)
   }
 
+  // ── modal handlers ────────────────────────────────────────────────────
+
+  const handlePhotoClick = useCallback((photo: Photo) => {
+    setSelectedPhoto(photo)
+  }, [])
+
+  const handleModalClose = useCallback(() => {
+    setSelectedPhoto(null)
+  }, [])
+
+  const handlePhotoUpdated = useCallback((updated: Photo) => {
+    setPhotos(prev => prev.map(p => p.id === updated.id ? updated : p))
+    setSelectedPhoto(updated)
+  }, [])
+
+  const handlePhotoDeleted = useCallback((id: string) => {
+    setPhotos(prev => prev.filter(p => p.id !== id))
+    setFavouriteIds(prev => { const next = new Set(prev); next.delete(id); return next })
+  }, [])
+
   // ── render helpers ────────────────────────────────────────────────────
 
   const renderCityFolders = (country: string) => {
-    const cities = getCitiesInCountry(country)
+    const cities = citiesByCountry[country] ?? {}
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {Object.entries(cities).map(([cityName, cityPhotos]) => {
-          const cover = getCoverPhoto(cityPhotos)
+          const cover = coverByKey[cityName] ?? cityPhotos[0]
           return (
             <div
               key={cityName}
@@ -247,7 +310,7 @@ export default function Gallery() {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {Object.entries(grouped).map(([groupName, groupPhotos]) => {
-          const cover = getCoverPhoto(groupPhotos)
+          const cover = coverByKey[groupName] ?? groupPhotos[0]
           return (
             <div
               key={groupName}
@@ -281,7 +344,7 @@ export default function Gallery() {
   // Individual photo grid — strict 3 columns on desktop, fixed 4:3 aspect ratio,
   // object-fit: cover for uniform cropping, and IntersectionObserver scroll-reveal.
   const renderPhotos = (photosToRender: Photo[]) => (
-    <PhotoGrid photos={photosToRender} />
+    <PhotoGrid photos={photosToRender} onPhotoClick={handlePhotoClick} />
   )
 
   // ── loading / empty states ────────────────────────────────────────────
@@ -316,10 +379,9 @@ export default function Gallery() {
   if (groupBy === 'favourites') {
     photosToDisplay = favouritedPhotos
   } else if (selectedGroup && selectedCity) {
-    const cities = getCitiesInCountry(selectedGroup)
-    photosToDisplay = cities[selectedCity] || []
+    photosToDisplay = citiesByCountry[selectedGroup]?.[selectedCity] || []
   } else if (selectedGroup && groupBy === 'country') {
-    const cities = getCitiesInCountry(selectedGroup)
+    const cities = citiesByCountry[selectedGroup] ?? {}
     if (Object.keys(cities).length > 1 && !selectedCity) {
       showCityFolders = true
     } else {
@@ -379,6 +441,13 @@ export default function Gallery() {
           {selectedCity ? `${selectedCity}, ${selectedGroup}` : selectedGroup}
         </h2>
       )}
+
+      <PhotoModal
+        photo={selectedPhoto}
+        onClose={handleModalClose}
+        onPhotoUpdated={handlePhotoUpdated}
+        onPhotoDeleted={handlePhotoDeleted}
+      />
 
       <div key={contentKey} className="animate-fadeIn">
         {groupBy === 'favourites' ? (

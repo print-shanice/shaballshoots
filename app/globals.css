@@ -213,3 +213,64 @@ input[type="date"].date-input-large-popup::-webkit-calendar-picker-indicator {
     text-wrap: balance;
   }
 }
+
+/* ── Modal overlay & backdrop ──────────────────────────────────────────
+   The overlay is a scroll container (overflow-y: auto).
+   The backdrop is a SEPARATE fixed element behind it — this isolates the
+   dark background from the scroll container's stacking context, which is
+   what previously caused the black flash (backdrop mount triggering a
+   compositing layer rebuild on the scroll container).
+   ─────────────────────────────────────────────────────────────────────── */
+
+.modal-overlay {
+  /* Smooth momentum scroll inside modal on iOS */
+  -webkit-overflow-scrolling: touch;
+  /* Prevent rubber-band scroll from propagating to page on iOS */
+  overscroll-behavior: contain;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.70);
+  /* Promote to own GPU layer — avoids first-frame compositing stutter on iOS */
+  will-change: opacity;
+  /* Backdrop is behind the modal card but inside the overlay's z-context */
+  z-index: -1;
+}
+
+.modal-card {
+  /* Ensure card sits above backdrop */
+  position: relative;
+  z-index: 1;
+}
+
+/* ── html scroll lock (applied by JS) ──────────────────────────────────
+   Lock html, not body. Locking body creates a new BFC, forces full
+   layout recalc, and causes the black flash. Locking html avoids all of
+   that — the body stays in exactly the same layout state. Body
+   padding-right is added by JS to compensate for scrollbar disappearing.
+   ─────────────────────────────────────────────────────────────────────── */
+html[data-scroll-y] {
+  overflow: hidden;
+}
+
+/* ── iOS viewport fixes ─────────────────────────────────────────────────
+   100vh is broken on iOS Safari — includes the browser chrome. Use
+   dvh (dynamic viewport height) where supported, fall back to 100vh.
+   ─────────────────────────────────────────────────────────────────────── */
+@supports (height: 100dvh) {
+  .modal-overlay {
+    height: 100dvh;
+  }
+}
+
+/* On touch devices, disable hover effects that don't degrade gracefully */
+@media (hover: none) {
+  .scroll-reveal {
+    /* Still animate in, but don't wait for hover — mobile has no hover */
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.65s ease-out, transform 0.65s ease-out;
+  }
+}
