@@ -229,6 +229,22 @@ input[type="date"].date-input-large-popup::-webkit-calendar-picker-indicator {
   overscroll-behavior: contain;
 }
 
+@keyframes modalFadeOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+.modal-closing {
+  animation: modalFadeOut 150ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  pointer-events: none; /* block clicks during fade-out */
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

@@ -76,6 +76,7 @@ export default function PhotoModal({ photo: initialPhoto, onClose, onPhotoUpdate
   const [saveError, setSaveError] = useState('')
   const [deleteError, setDeleteError] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [closing, setClosing] = useState(false)
 
   const overlayRef = useRef<HTMLDivElement>(null)
 
@@ -87,6 +88,7 @@ export default function PhotoModal({ photo: initialPhoto, onClose, onPhotoUpdate
     setSaveError('')
     setFavLoaded(false)
     setIsFavourited(false)
+    setClosing(false)
   }, [initialPhoto?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch favourite status lazily when modal opens
@@ -120,12 +122,19 @@ export default function PhotoModal({ photo: initialPhoto, onClose, onPhotoUpdate
     return () => document.removeEventListener('touchmove', prevent)
   }, [initialPhoto])
 
+  // Trigger the fade-out animation, then unmount after it completes
+  const triggerClose = useCallback(() => {
+    if (closing) return
+    setClosing(true)
+    setTimeout(() => onClose(), 150) // matches modal-fadeOut duration in CSS
+  }, [closing, onClose])
+
   // Close on Escape
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') triggerClose() }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [onClose])
+  }, [triggerClose])
 
   const handleToggleFavourite = useCallback(async () => {
     if (!photo || togglingFav) return
@@ -191,7 +200,7 @@ export default function PhotoModal({ photo: initialPhoto, onClose, onPhotoUpdate
       if (res.status === 401) { setDeleteError('unauthorised — please log in again'); return }
       if (!res.ok) { const b = await res.json().catch(() => ({})); setDeleteError(b.error ?? 'failed to delete photo'); return }
       onPhotoDeleted?.(photo.id)
-      onClose()
+      triggerClose()
     } catch { setDeleteError('network error — please try again') }
     finally { setDeleting(false) }
   }
@@ -218,8 +227,12 @@ export default function PhotoModal({ photo: initialPhoto, onClose, onPhotoUpdate
       role="dialog"
       aria-modal="true"
       aria-label="Photo detail"
-      className="modal-overlay fixed inset-0 z-50 flex items-start justify-center overflow-y-auto animate-fadeIn"
-      onClick={(e) => { if (e.target === overlayRef.current) onClose() }}
+      className={`modal-overlay fixed inset-0 z-50 flex items-start justify-center overflow-y-auto ${closing ? 'modal-closing' : 'animate-fadeIn'}`}
+      onClick={(e) => {
+        const t = e.target as HTMLElement
+        // Close when clicking the scroll container itself or the backdrop layer
+        if (t === overlayRef.current || t.classList.contains('modal-backdrop')) triggerClose()
+      }}
     >
       {/* Separate backdrop layer — sits behind scroll container, no stacking context conflict */}
       <div className="modal-backdrop" aria-hidden="true" />
@@ -229,7 +242,7 @@ export default function PhotoModal({ photo: initialPhoto, onClose, onPhotoUpdate
         {/* Header: close button always above image in normal flow */}
         <div className="flex items-center justify-end px-4 pt-4 pb-2">
           <button
-            onClick={onClose}
+            onClick={triggerClose}
             className="flex items-center justify-center w-8 h-8 rounded-full text-stone-400 hover:text-stone-900 hover:bg-stone-100 transition-colors duration-150"
             aria-label="Close modal"
           >
